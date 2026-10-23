@@ -21,13 +21,18 @@ from rig_twin.core.models import (
 )
 from rig_twin.demo import build_sample_well
 from rig_twin.ingestion.stream_processor import StreamProcessor
+from rig_twin.core.fleet import FleetManager
+from rig_twin.physics.casing_wear import CasingWearAndFatigueEngine
 from rig_twin.physics.safe_trip_envelope import SafeTripEnvelopeOptimizer
 from rig_twin.physics.torque_drag import TorqueDragEngine
+from rig_twin.physics.transient_hydraulics import TransientHydraulicsEngine
+from rig_twin.physics.vibrations import DrillstringDynamicsEngine
 from rig_twin.physics.well_control_kill_sheet import (
     WellControlEngine,
     WellControlInput,
     KillSheetResult,
 )
+from rig_twin.physics.what_if_sandbox import WhatIfSandbox
 from rig_twin.persistence.repository import TimescaleTwinRepository
 from rig_twin.streaming.protocols import RigStreamClient
 
@@ -38,6 +43,7 @@ class AppState:
     fluid: FluidProperties
     repo: TimescaleTwinRepository
     twin: StreamProcessor
+    fleet: FleetManager
     stream_client: RigStreamClient
     connected_websockets: Set[WebSocket] = set()
     latest_telemetry: TelemetryRecord
@@ -61,6 +67,8 @@ async def lifespan(app: FastAPI):
         pore_pressure_ppg=10.6,
         fracture_pressure_ppg=14.5,
     )
+    state.fleet = FleetManager(repository=state.repo)
+    state.fleet.register_well(state.well, state.fluid, pore_pressure_ppg=10.6, fracture_pressure_ppg=14.5)
     state.stream_client = RigStreamClient(well_id=state.well.well_id)
 
     # Launch background continuous simulation task
@@ -103,6 +111,13 @@ async def background_telemetry_loop():
         state.latest_telemetry = record
         state.latest_physics = phys
         state.latest_anomaly = anom
+
+        # Update fleet cache
+        state.fleet.latest_telemetry[record.well_id] = record
+        state.fleet.latest_physics[record.well_id] = phys
+        state.fleet.latest_anomalies[record.well_id] = anom
+        if anom.severity.value in ("WARNING", "CRITICAL"):
+            state.fleet.active_alert_counts[record.well_id] = state.fleet.active_alert_counts.get(record.well_id, 0) + 1
 
         # Broadcast to active WebSockets
         if state.connected_websockets:
@@ -185,6 +200,71 @@ async def get_broomstick_curves():
     td_engine = TorqueDragEngine(geometry=state.well, fluid=state.fluid)
     curves = td_engine.generate_broomstick_envelope(max_depth_ft=12000.0, step_ft=1000.0)
     return {"broomstick_curves": curves}
+
+
+@app.get("/api/vibrations/bha")
+async def get_bha_vibration_evaluation():
+    """Evaluate 3-axis BHA resonance, forward/backward whirl, and safe RPM windows."""
+    engine = DrillstringDynamicsEngine(drillstring_length_ft=state.latest_telemetry.measured_depth_ft if hasattr(state, 'latest_telemetry') else 11450.0)
+    result = engine.evaluate_safe_operating_rpm_bands()
+    return result.model_dump(mode="json")
+
+
+@app.get("/api/transient/waterhammer")
+async def get_transient_waterhammer(flow_gpm: float = 520.0, closure_sec: float = 0.5):
+    """Simulate Joukowsky waterhammer pressure surge and casing burst safety."""
+    engine = TransientHydraulicsEngine(fluid=state.fluid)
+    result = engine.simulate_valve_closure_surge(flow_rate_gpm=flow_gpm, valve_closure_time_sec=closure_sec)
+    return result.model_dump(mode="json")
+
+
+@app.get("/api/casing/wear")
+async def get_casing_wear(depth_ft: float = 8500.0, hours: float = 72.0, rpm: float = 120.0):
+    """Calculate White & Dawson casing wear and Palmgren-Miner cyclic drillpipe fatigue."""
+    engine = CasingWearAndFatigueEngine()
+    wear = engine.calculate_casing_wear(depth_ft=depth_ft, contact_force_lbf=1200.0, dogleg_deg_100ft=2.5, rotating_hours=hours, rpm=rpm)
+    fatigue = engine.calculate_drillpipe_fatigue(depth_ft=depth_ft, dogleg_deg_100ft=2.5, rotating_hours=hours, rpm=rpm)
+    return {
+        "casing_wear": wear.model_dump(mode="json"),
+        "drillpipe_fatigue": fatigue.model_dump(mode="json"),
+    }
+
+
+@app.get("/api/fleet/summary")
+async def get_fleet_summary():
+    """Return real-time operational status across the entire rig fleet."""
+    return {"fleet": [s.model_dump(mode="json") for s in state.fleet.get_fleet_summary()]}
+
+
+@app.post("/api/what-if/simulate")
+async def simulate_what_if_scenario(
+    scenario_type: str = "FLOW_STEP",
+    target_value: float = 580.0,
+):
+    """Run an automated what-if forward simulation (FLOW_STEP, MUD_WEIGHT, TRIPPING_SPEED)."""
+    tel = state.latest_telemetry if hasattr(state, 'latest_telemetry') else TelemetryRecord(
+        timestamp=datetime.now(timezone.utc),
+        well_id=state.well.well_id,
+        measured_depth_ft=11450.0,
+        true_vertical_depth_ft=11450.0,
+        bit_depth_ft=11450.0,
+        hole_depth_ft=11450.0,
+        flow_rate_in_gpm=520.0,
+        flow_rate_out_gpm=520.0,
+        standpipe_pressure_psi=4085.0,
+    )
+    sandbox = WhatIfSandbox(geometry=state.well, fluid=state.fluid, current_telemetry=tel)
+
+    if scenario_type == "FLOW_STEP":
+        res = sandbox.simulate_flow_rate_step(target_flow_gpm=target_value)
+    elif scenario_type == "MUD_WEIGHT":
+        res = sandbox.simulate_mud_weight_change(target_mud_weight_ppg=target_value)
+    elif scenario_type == "TRIPPING_SPEED":
+        res = sandbox.simulate_tripping_speed(target_velocity_ft_min=target_value)
+    else:
+        res = sandbox.simulate_flow_rate_step(target_flow_gpm=target_value)
+
+    return res.model_dump(mode="json")
 
 
 @app.post("/api/simulate/kick")

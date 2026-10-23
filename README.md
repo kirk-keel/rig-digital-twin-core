@@ -1,11 +1,14 @@
 # rig-digital-twin-core
 
-[![CI Tests](https://img.shields.io/badge/tests-44%20passed-brightgreen.svg)]()
+[![CI Tests](https://img.shields.io/badge/tests-50%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)]()
 [![Physics](https://img.shields.io/badge/physics-Herschel--Bulkley%20%7C%20API%20RP%2013D-orange.svg)]()
+[![Vibrations](https://img.shields.io/badge/dynamics-3--Axis%20BHA%20Whirl%20%26%20Resonance-red.svg)]()
+[![Waterhammer](https://img.shields.io/badge/hydraulics-Joukowsky%20Transient%20Surge-critical.svg)]()
 [![Directional](https://img.shields.io/badge/trajectory-Minimum%20Curvature%20(API)-blue.svg)]()
 [![Geopressure](https://img.shields.io/badge/pore%20pressure-Eaton's%20Method-red.svg)]()
 [![Torque & Drag](https://img.shields.io/badge/mechanics-3D%20Johancsik%20Soft--String-yellow.svg)]()
+[![Fleet](https://img.shields.io/badge/fleet-Multi--Rig%20Orchestrator-teal.svg)]()
 [![Protocol](https://img.shields.io/badge/protocols-WITSML%20%7C%20WITS0%20TCP-purple.svg)]()
 [![Database](https://img.shields.io/badge/timeseries-TimescaleDB-blueviolet.svg)]()
 [![Dashboard](https://img.shields.io/badge/console-FastAPI%20%2B%20WebSocket%20UI-success.svg)]()
@@ -253,28 +256,62 @@ Asynchronous TCP server and stream decoder processing standard WITS Level 0 ASCI
 ### 4.13 Automated Incident Audit Exporter
 Generates executive-ready Markdown dossiers and structured JSON payloads for kick precursors, pack-offs, and swab events, complete with timeline analysis and IADC kill sheet solutions.
 
+### 4.14 3-Axis BHA Dynamics & Whirl Resonance Modal Engine
+Evaluates acoustic resonance and finite-element lumped dynamics across 3 vibration modes:
+- **Axial Bit Bounce**: Acoustic fundamental frequencies ($f_{ax} = c_{steel} / 4L$) and cutter impact critical RPM.
+- **Torsional Stick-Slip**: Natural frequency and critical slip harmonics.
+- **Lateral Forward & Backward BHA Whirl**: Euler-Bernoulli beam critical speeds and Campbell resonance map defining safe operating RPM windows.
+
+### 4.15 Hydraulic Transient Waterhammer & MPD Choke Surge Engine
+Models 1D acoustic wave propagation in drilling fluids ($c = \sqrt{(B_m/\rho) / (1 + (B_m/E)(D/t))}$):
+- Calculates rapid valve closure **Joukowsky Pressure Surges**:
+  $$\Delta P_{\text{surge}} = \frac{\rho_{\text{mud}} \cdot c \cdot \Delta v}{619.34}$$
+- Simulates standing acoustic wave reflections ($t_{rt} = 2L/c$) and checks casing burst safety margins during sudden pump trips or MPD choke actuations.
+
+### 4.16 Casing Wear & Drillpipe Cyclic Bending Fatigue Accumulator
+- **White & Dawson Casing Wear**: Evaluates crescent groove penetration ($h_w \propto \sqrt{V_w}$) from tool joint contact forces ($F_n$), derating casing burst and collapse limits in real time.
+- **Palmgren-Miner Cyclic Fatigue**: Computes alternating bending stress in directional doglegs ($\sigma_b = \frac{E \cdot D_{pipe} \cdot DLS}{2 \times 5729.6}$) and accumulates fatigue damage $D = \sum (n / N_f)$ to prevent downhole twist-offs.
+
+### 4.17 Fleet-Wide Multi-Rig Orchestration
+A unified `FleetManager` coordinates concurrent real-time digital twins across an operating fleet, aggregating basin-wide compaction trend priors, active kick alerts, and operational risk metrics.
+
+### 4.18 Automated "What-If" Predictive Operational Sandbox
+Allows drilling superintendents to test prospective changes before execution downhole:
+- Flow rate step tests (predicting pump SPP and ECD margins)
+- Mud weight adjustments (evaluating hydrostatic trip margin and fracture limits)
+- Tripping speed adjustments (evaluating dynamic surge/swab bottomhole pressure swings)
+
 ---
 
 ## 5. Unified CLI Command Center (`rig-twin`)
 
 `rig-digital-twin-core` includes a full command-line suite:
 ```bash
-# Launch FastAPI streaming server and Driller Web Console
+# 1. Launch FastAPI streaming server and Driller Web Console
 rig-twin serve --port 8000
 
-# Run automated terminal simulation with colored outputs
+# 2. Run automated terminal simulation with colored outputs
 rig-twin sim
 
-# Calculate automated IADC/API Well Control Kill Sheet
+# 3. Calculate automated IADC/API Well Control Kill Sheet
 rig-twin kill-sheet --sidpp 450 --sicp 680 --tvd 11500 --mw 11.2
 
-# Compute 3D wellbore trajectory via Minimum Curvature Method
+# 4. Compute 3D wellbore trajectory via Minimum Curvature Method
 rig-twin trajectory
 
-# Predict pore pressure and fracture gradient via Eaton's method
+# 5. Predict pore pressure and fracture gradient via Eaton's method
 rig-twin geopressure --tvd 11500 --rop 65 --rpm 120 --wob 22
 
-# Launch TCP WITS Level 0 streaming server
+# 6. Evaluate 3-axis BHA vibrations, whirl speeds, and safe RPM bands
+rig-twin vibrations --length 11450 --span 60
+
+# 7. Simulate hydraulic transient waterhammer Joukowsky pressure surge
+rig-twin waterhammer --depth 11450 --flow 520 --close-time 0.5
+
+# 8. Run an automated what-if operational simulation
+rig-twin what-if --scenario flow --value 600 --depth 11450
+
+# 9. Launch TCP WITS Level 0 streaming server
 rig-twin wits0-server --port 5000
 ```
 

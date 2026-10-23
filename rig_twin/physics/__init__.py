@@ -24,6 +24,24 @@ from rig_twin.physics.geopressure import (
     GeopressureEngine,
     GeopressureProfilePoint,
 )
+from rig_twin.physics.vibrations import (
+    DrillstringDynamicsEngine,
+    VibrationResonanceBand,
+    BHAWhirlEvaluation,
+)
+from rig_twin.physics.transient_hydraulics import (
+    TransientHydraulicsEngine,
+    TransientSurgeResult,
+)
+from rig_twin.physics.casing_wear import (
+    CasingWearAndFatigueEngine,
+    CasingWearSectionResult,
+    DrillpipeFatigueResult,
+)
+from rig_twin.physics.what_if_sandbox import (
+    WhatIfSandbox,
+    WhatIfScenarioResult,
+)
 
 __all__ = [
     "RheologyEngine",
@@ -44,4 +62,14 @@ __all__ = [
     "TrajectoryPoint",
     "GeopressureEngine",
     "GeopressureProfilePoint",
+    "DrillstringDynamicsEngine",
+    "VibrationResonanceBand",
+    "BHAWhirlEvaluation",
+    "TransientHydraulicsEngine",
+    "TransientSurgeResult",
+    "CasingWearAndFatigueEngine",
+    "CasingWearSectionResult",
+    "DrillpipeFatigueResult",
+    "WhatIfSandbox",
+    "WhatIfScenarioResult",
 ]

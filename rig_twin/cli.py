@@ -12,9 +12,13 @@ import uvicorn
 from rig_twin.core.models import TelemetryRecord
 from rig_twin.core.report_exporter import IncidentReportExporter
 from rig_twin.demo import build_sample_well, run_simulation_demo
+from rig_twin.physics.casing_wear import CasingWearAndFatigueEngine
 from rig_twin.physics.geopressure import GeopressureEngine
 from rig_twin.physics.trajectory import DirectionalTrajectoryEngine, SurveyStation
+from rig_twin.physics.transient_hydraulics import TransientHydraulicsEngine
+from rig_twin.physics.vibrations import DrillstringDynamicsEngine
 from rig_twin.physics.well_control_kill_sheet import WellControlEngine, WellControlInput
+from rig_twin.physics.what_if_sandbox import WhatIfSandbox
 from rig_twin.ingestion.wits0_parser import Wits0TcpServer
 
 
@@ -126,6 +130,88 @@ def cli_wits0(args: argparse.Namespace) -> None:
         asyncio.run(server.stop())
 
 
+def cli_vibrations(args: argparse.Namespace) -> None:
+    """Evaluate BHA vibrations and resonance bands."""
+    engine = DrillstringDynamicsEngine(drillstring_length_ft=args.length, stabilizer_spacing_ft=args.span)
+    res = engine.evaluate_safe_operating_rpm_bands()
+    print("=" * 80)
+    print(f" DRILLSTRING & BHA VIBRATION MODAL ANALYSIS (Length: {args.length:.0f} ft)")
+    print("=" * 80)
+    print(f" Axial Bit Bounce Natural Frequency:     {res.axial_bit_bounce_natural_freq_hz:.3f} Hz (Critical: {res.axial_critical_rpm:.1f} RPM)")
+    print(f" Torsional Stick-Slip Natural Frequency: {res.torsional_stick_slip_natural_freq_hz:.3f} Hz (Critical: {res.torsional_critical_rpm:.1f} RPM)")
+    print(f" BHA Lateral Forward Whirl:              {res.forward_whirl_critical_rpm:.1f} RPM")
+    print(f" BHA Lateral Backward Whirl:             {res.backward_whirl_critical_rpm:.1f} RPM")
+    print("-" * 80)
+    print(" SAFE OPERATING RPM WINDOWS:")
+    for w in res.safe_rpm_windows:
+        print(f"  ✅ {w[0]:.0f} to {w[1]:.0f} RPM")
+    print("-" * 80)
+    print(" DANGEROUS RESONANCE BANDS:")
+    for b in res.resonance_bands:
+        print(f"  ❌ [{b.severity}] {b.mode:<16} (Center: {b.center_rpm:.0f} RPM, Range: {b.min_rpm:.0f} - {b.max_rpm:.0f} RPM)")
+    print("=" * 80)
+
+
+def cli_waterhammer(args: argparse.Namespace) -> None:
+    """Simulate hydraulic waterhammer transient surge pressure."""
+    well, fluid = build_sample_well()
+    fluid.density_ppg = args.mw
+    engine = TransientHydraulicsEngine(fluid=fluid, well_depth_ft=args.depth)
+    res = engine.simulate_valve_closure_surge(flow_rate_gpm=args.flow, valve_closure_time_sec=args.close_time)
+
+    print("=" * 80)
+    print(f" TRANSIENT WATERHAMMER JOUKOWSKY SURGE SIMULATOR (Depth: {args.depth:.0f} ft)")
+    print("=" * 80)
+    print(f" Mud Acoustic Wave Speed:           {res.mud_acoustic_speed_fps:.1f} ft/s")
+    print(f" Round-Trip Travel Time (2L/c):     {res.round_trip_acoustic_time_sec:.3f} sec")
+    print(f" Valve Closure Time:                {res.closure_time_sec:.3f} sec ({'RAPID SHUT-IN' if res.is_rapid_closure else 'GRADUAL CLOSURE'})")
+    print(f" Joukowsky Peak Pressure Surge:     {res.joukowsky_peak_surge_psi:.1f} psi")
+    print(f" Effective Surge Pressure at Choke: {res.effective_surge_pressure_psi:.1f} psi")
+    print(f" Total Peak Transient Pressure:     {res.total_transient_peak_pressure_psi:.1f} psi")
+    print(f" Casing Burst Rating Safety Factor: {res.casing_burst_safety_factor:.2f}")
+    print(f" Casing Burst Limit Compromised:    {'⚠️ YES - SURGE THREATENS CASING' if res.is_burst_limit_threatened else '✅ NO - WITHIN SAFETY MARGIN'}")
+    print("=" * 80)
+
+
+def cli_what_if(args: argparse.Namespace) -> None:
+    """Run an automated what-if operational simulation."""
+    well, fluid = build_sample_well()
+    tel = TelemetryRecord(
+        timestamp=datetime.now(timezone.utc),
+        well_id=well.well_id,
+        measured_depth_ft=args.depth,
+        true_vertical_depth_ft=args.depth,
+        bit_depth_ft=args.depth,
+        hole_depth_ft=args.depth,
+        flow_rate_in_gpm=520.0,
+        flow_rate_out_gpm=520.0,
+        standpipe_pressure_psi=4085.0,
+    )
+    sandbox = WhatIfSandbox(well, fluid, tel)
+
+    if args.scenario == "flow":
+        res = sandbox.simulate_flow_rate_step(target_flow_gpm=args.value)
+    elif args.scenario == "mud":
+        res = sandbox.simulate_mud_weight_change(target_mud_weight_ppg=args.value)
+    elif args.scenario == "trip":
+        res = sandbox.simulate_tripping_speed(target_velocity_ft_min=args.value)
+    else:
+        res = sandbox.simulate_flow_rate_step(target_flow_gpm=args.value)
+
+    print("=" * 80)
+    print(f" WHAT-IF OPERATIONAL SIMULATION - [{res.scenario_type}]")
+    print("=" * 80)
+    print(f" Tested Parameter:          {res.parameter_tested} = {res.hypothetical_value:.1f} (Baseline: {res.baseline_value:.1f})")
+    print(f" Predicted Standpipe Press: {res.predicted_spp_psi:.1f} psi")
+    print(f" Predicted Dynamic ECD:     {res.predicted_ecd_ppg:.2f} ppg")
+    print(f" Safe Execution Status:     {'✅ SAFE TO EXECUTE' if res.is_safe else '⚠️ POTENTIAL HAZARD'}")
+    if res.risk_factors:
+        for r in res.risk_factors:
+            print(f"  ❌ Risk: {r}")
+    print(f" Engineering Insights:      {res.engineering_insights}")
+    print("=" * 80)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="rig-twin",
@@ -172,6 +258,24 @@ def main():
     p_wits0.add_argument("--host", default="0.0.0.0", help="Host")
     p_wits0.add_argument("--port", type=int, default=5000, help="Port (default: 5000)")
 
+    # 7. vibrations
+    p_vib = subparsers.add_parser("vibrations", help="Evaluate 3-axis BHA vibrations and whirl resonance bands")
+    p_vib.add_argument("--length", type=float, default=11450.0, help="Drillstring length in ft")
+    p_vib.add_argument("--span", type=float, default=60.0, help="Stabilizer spacing span in ft")
+
+    # 8. waterhammer
+    p_wh = subparsers.add_parser("waterhammer", help="Simulate hydraulic transient waterhammer Joukowsky pressure surge")
+    p_wh.add_argument("--depth", type=float, default=11450.0, help="Well depth in ft")
+    p_wh.add_argument("--flow", type=float, default=520.0, help="Flow rate in gpm")
+    p_wh.add_argument("--close-time", type=float, default=0.5, help="Valve closure time in seconds")
+    p_wh.add_argument("--mw", type=float, default=11.2, help="Mud weight in ppg")
+
+    # 9. what-if
+    p_whatif = subparsers.add_parser("what-if", help="Run automated what-if operational simulation")
+    p_whatif.add_argument("--scenario", choices=["flow", "mud", "trip"], default="flow", help="Scenario type")
+    p_whatif.add_argument("--value", type=float, required=True, help="Target hypothetical parameter value")
+    p_whatif.add_argument("--depth", type=float, default=11450.0, help="Well depth in ft")
+
     args = parser.parse_args()
     if not args.subcommand:
         parser.print_help()
@@ -184,6 +288,9 @@ def main():
         "trajectory": cli_trajectory,
         "geopressure": cli_geopressure,
         "wits0-server": cli_wits0,
+        "vibrations": cli_vibrations,
+        "waterhammer": cli_waterhammer,
+        "what-if": cli_what_if,
     }
 
     func = dispatch.get(args.subcommand)
