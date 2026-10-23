@@ -1,9 +1,11 @@
 # rig-digital-twin-core
 
-[![CI Tests](https://img.shields.io/badge/tests-22%20passed-brightgreen.svg)]()
+[![CI Tests](https://img.shields.io/badge/tests-38%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)]()
 [![Physics](https://img.shields.io/badge/physics-Herschel--Bulkley%20%7C%20API%20RP%2013D-orange.svg)]()
+[![Torque & Drag](https://img.shields.io/badge/mechanics-3D%20Johancsik%20Soft--String-yellow.svg)]()
 [![Database](https://img.shields.io/badge/timeseries-TimescaleDB-blueviolet.svg)]()
+[![Dashboard](https://img.shields.io/badge/console-FastAPI%20%2B%20WebSocket%20UI-success.svg)]()
 
 **rig-digital-twin-core** is a real-time wellbore simulation and predictive digital twin engine for oil and gas drilling operations. It couples high-fidelity, deterministic petroleum engineering physics (wellbore hydraulics, Herschel-Bulkley non-Newtonian rheology, annular pressure losses, bit nozzle jet dynamics, surge/swab tripping kinematics) with adaptive machine learning state estimators.
 
@@ -185,7 +187,70 @@ All streaming telemetry, computed physics baselines, and ML prediction deltas ar
 
 ---
 
-## 4. Repository Structure
+## 4. Enhanced Physics, Optimization & Well Control Modules
+
+### 4.1 Wellbore Thermal & Pressure-Dependent PVT Modeling ($\rho(P, T)$)
+Calculates transient temperature profiles inside drillstring and annulus (Hasan & Kabir formulation) and couples real-time density corrections:
+$$\rho(P, T) = \rho_0 \left[1 + \frac{P - P_0}{B_m} - \alpha_m (T - T_0)\right]$$
+Includes Arrhenius temperature thinning adjustments for effective downhole viscosity.
+
+### 4.2 3D Soft-String Torque & Drag (Johancsik Formulation)
+Integrates normal contact forces, buoyant drillstring weight, and 3D wellbore curvature:
+- Calculates **Pick-up**, **Slack-off**, and **Rotating Off-Bottom** surface hook loads.
+- Evaluates Dawson-Paslay sinusoidal buckling and Chen-Cheatham helical buckling limits.
+- Generates complete multi-friction-coefficient ($\mu = 0.15, 0.25, 0.35$) **Broomstick Envelopes** for stuck pipe prevention.
+
+### 4.3 Cuttings Transport & Hole Cleaning Index (HCI)
+Evaluates Larsen & Moore cuttings mechanics:
+- Computes particle slip velocity ($v_{\text{slip}}$) in non-Newtonian drilling fluids.
+- Determines critical transport fluid velocity ($v_{\text{crit}}$) to prevent cuttings bed accumulation.
+- Calculates in-situ cuttings concentration and dynamic **Hole Cleaning Index (HCI)**, dynamically feeding friction factor multipliers back into the hydraulics engine.
+
+### 4.4 Two-Phase Gas Influx Migration & Boyle Expansion
+Simulates gas slip velocity and real-time bubble expansion using the Zuber-Findlay drift-flux model:
+$$v_g = C_0 \cdot v_m + v_d, \qquad V_2 = V_1 \left(\frac{P_1}{P_2}\right) \left(\frac{T_2}{T_1}\right) \left(\frac{Z_2}{Z_1}\right)$$
+Predicts time remaining before gas reaches the subsea or surface Blowout Preventer (BOP).
+
+### 4.5 Safe Tripping Speed Envelope Optimizer
+Inverts non-linear surge and swab physics via numerical root finding (`scipy.optimize.brentq`):
+- Dynamically computes the **Maximum Safe Pulling Speed (POOH)** to keep effective swab ECD strictly above formation pore pressure + safety margin.
+- Dynamically computes the **Maximum Safe Running Speed (RIH)** to prevent surging above formation breakdown/fracture gradient.
+
+### 4.6 Automated Well Control Kill Sheet (API RP 59 / IADC Standards)
+When shut in on a kick, automatically computes:
+- Kill Mud Weight ($\text{KMW}$), Initial Circulating Pressure ($\text{ICP}$), and Final Circulating Pressure ($\text{FCP}$).
+- Initial and Kill MAASP (Maximum Allowable Annular Surface Pressure).
+- Drillstring and annular pump stroke requirements.
+- Generates complete stroke-by-stroke pressure step-down schedules for the **Wait & Weight Method** and **Driller's Method**.
+
+### 4.7 Mechanical Specific Energy (MSE) & Bit Dysfunction Tracker
+Calculates Teale Mechanical Specific Energy and diagnoses drilling dysfunctions:
+- **Bit Balling**: High WOB, low ROP, low mechanical efficiency ($< 20\%$).
+- **Stick-Slip Vibration**: High torque standard deviation ($\sigma_T / \bar{T} > 35\%$).
+
+### 4.8 Online Bayesian Parameter Auto-Calibration
+A recursive Bayesian filter continuously calibrates downhole open-hole friction factor multipliers ($f_{\text{mult}}$) and drillpipe roughness using streaming PWD annular pressure and surface SPP telemetry.
+
+---
+
+## 5. Real-Time Driller Console Web Dashboard & API
+
+The core includes an asynchronous FastAPI backend and a responsive dark-mode Web Dashboard served directly at `http://localhost:8000`:
+- **Real-Time Physics Residual Strip Chart**: 1Hz streaming visualization of $\Delta \text{SPP}$ and $\Delta \text{Flow}$ with confidence bands.
+- **Drilling Margin Window**: Continuous depth profile of Pore Pressure, Dynamic ECD, and Fracture Gradient.
+- **Hook Load Broomstick Charts**: Pick-up, Slack-off, and Rotating off-bottom curves.
+- **Safe Tripping Envelope Gauges**: Dynamic POOH and RIH speed limits.
+- **Automated Kill Sheet Card**: Live ICP/FCP, MAASP, and step-down schedules.
+- **Active Alert Banner**: Instant visual warnings for kick precursors, pack-offs, and washouts with drill floor actions.
+
+To launch the live dashboard:
+```bash
+uvicorn rig_twin.server:app --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 6. Repository Structure
 
 ```
 rig-digital-twin-core/
