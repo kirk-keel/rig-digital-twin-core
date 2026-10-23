@@ -1,0 +1,82 @@
+{
+  "well_id": "DEEPWATER-NAVI-01",
+  "operator": "PetroTwin Global",
+  "location": "Gulf of Mexico - Mississippi Canyon Block 252",
+  "water_depth_ft": 4500.0,
+  "total_measured_depth_ft": 14500.0,
+  "total_vertical_depth_ft": 12800.0,
+  "geometry": {
+    "sections": [
+      {
+        "top_depth_ft": 0.0,
+        "bottom_depth_ft": 4500.0,
+        "inner_diameter_in": 19.5,
+        "type": "marine_riser"
+      },
+      {
+        "top_depth_ft": 4500.0,
+        "bottom_depth_ft": 9500.0,
+        "inner_diameter_in": 12.415,
+        "type": "casing"
+      },
+      {
+        "top_depth_ft": 9500.0,
+        "bottom_depth_ft": 14500.0,
+        "inner_diameter_in": 8.5,
+        "type": "open_hole"
+      }
+    ]
+  },
+  "drillstring": [
+    {
+      "component_name": "5-inch S-135 Drill Pipe",
+      "outer_diameter_in": 5.0,
+      "inner_diameter_in": 4.276,
+      "length_ft": 13300.0,
+      "weight_lbf_per_ft": 19.5
+    },
+    {
+      "component_name": "6.5-inch Heavy Weight Drill Pipe (HWDP)",
+      "outer_diameter_in": 6.5,
+      "inner_diameter_in": 4.0,
+      "length_ft": 700.0,
+      "weight_lbf_per_ft": 48.0
+    },
+    {
+      "component_name": "6.75-inch Drill Collars & MWD/PWD Sub",
+      "outer_diameter_in": 6.75,
+      "inner_diameter_in": 2.81,
+      "length_ft": 500.0,
+      "weight_lbf_per_ft": 85.0
+    }
+  ],
+  "bit": {
+    "outer_diameter_in": 8.5,
+    "nozzles_32nds": [14, 14, 14, 16],
+    "total_flow_area_sq_in": 0.584,
+    "discharge_coefficient": 0.95
+  },
+  "mud": {
+    "mud_type": "Synthetic Oil-Based Mud (SOBM)",
+    "density_ppg": 11.8,
+    "rheology": {
+      "theta_600": 58.0,
+      "theta_300": 34.0,
+      "theta_200": 26.0,
+      "theta_100": 17.0,
+      "theta_6": 6.0,
+      "theta_3": 4.5,
+      "tau_0_lbf_100sqft": 4.5,
+      "consistency_k": 0.38,
+      "behavior_index_n": 0.72
+    },
+    "pv_cp": 24.0,
+    "yp_lbf_100sqft": 10.0
+  },
+  "geopressure": {
+    "normal_pore_pressure_ppg": 8.65,
+    "eaton_exponent_nctl": 1.2,
+    "overburden_gradient_ppg": 18.5,
+    "estimated_fracture_gradient_ppg": 14.8
+  }
+}

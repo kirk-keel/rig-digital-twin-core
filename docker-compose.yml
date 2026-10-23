@@ -1,22 +1,52 @@
+version: "3.8"
+
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
     container_name: rig-twin-timescaledb
     environment:
-      POSTGRES_USER: rig_admin
-      POSTGRES_PASSWORD: rig_password
-      POSTGRES_DB: rig_digital_twin
+      POSTGRES_USER: ${POSTGRES_USER:-rig_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rig_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rig_digital_twin}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
       - ./sql/001_timescaledb_hypertables.sql:/docker-entrypoint-initdb.d/001_timescaledb_hypertables.sql
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rig_admin -d rig_digital_twin"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rig_admin} -d ${POSTGRES_DB:-rig_digital_twin}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  rig-twin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rig-twin-app
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rig_admin}:${POSTGRES_PASSWORD:-rig_password}@timescaledb:5432/${POSTGRES_DB:-rig_digital_twin}
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8000"
+      WITS0_HOST: "0.0.0.0"
+      WITS0_PORT: "9090"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+    volumes:
+      - ./configs:/app/configs:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   timescaledb_data:

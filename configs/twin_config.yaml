@@ -1,0 +1,56 @@
+# Rig Digital Twin Core Configuration
+app:
+  name: "Rig Digital Twin Core"
+  version: "0.1.0"
+  environment: "production"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+  cors_origins:
+    - "*"
+
+streaming:
+  wits0:
+    host: "0.0.0.0"
+    port: 9090
+    packet_interval_sec: 1.0
+  websocket:
+    heartbeat_interval_sec: 5.0
+
+database:
+  url: "postgresql://rig_admin:rig_password@timescaledb:5432/rig_digital_twin"
+  pool_size: 20
+  max_overflow: 10
+  pool_recycle: 1800
+  echo: false
+
+physics:
+  discretization_step_ft: 100.0
+  rheology_model: "herschel_bulkley"  # Options: herschel_bulkley, bingham_plastic, power_law
+  temperature_gradient_deg_f_per_100ft: 1.4
+  surface_temperature_deg_f: 70.0
+  thermal_pvt_enabled: true
+  joukowsky_acoustic_c_ft_s: 4200.0
+  casing_wear_coefficient: 1.5e-10
+
+estimator:
+  kalman:
+    process_noise_covariance: 0.05
+    measurement_noise_covariance: 1.5
+  cusum:
+    drift_allowance_k: 0.5
+    decision_threshold_h: 4.5
+  auto_calibration:
+    enabled: true
+    interval_seconds: 30
+    bayesian_learning_rate: 0.15
+
+thresholds:
+  kick_pit_gain_bbl: 10.0
+  kick_delta_flow_pct: 12.0
+  swab_pressure_drop_psi: 150.0
+  packoff_pressure_spike_psi: 200.0
+  washout_pressure_drop_psi: 180.0
+  stick_slip_rpm_variance_pct: 35.0

@@ -1,15 +1,79 @@
-.venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.pytest_cache/
-.coverage
-htmlcov/
-dist/
+
+# C extensions and build distributions
 build/
-*.egg-info/
+develop-eggs/
+dist/
+downloads/
+eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing and coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+
+# Environment files and credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
+
+# Database files and persistent volumes
+timescaledb_data/
+*.sqlite
+*.sqlite3
+*.db
+data/
+
+# IDE, editor, and OS files
 .idea/
 .vscode/
-timescaledb_data/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and runtime dumps
+*.log
+logs/
+*.pid
+crash_reports/
+reports/generated/

@@ -1,7 +1,8 @@
 # rig-digital-twin-core
 
-[![CI Tests](https://img.shields.io/badge/tests-50%20passed-brightgreen.svg)]()
+[![CI Tests](https://img.shields.io/badge/tests-55%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)]()
+[![Docker](https://img.shields.io/badge/docker-multi--stage%20ready-2496ED.svg)]()
 [![Physics](https://img.shields.io/badge/physics-Herschel--Bulkley%20%7C%20API%20RP%2013D-orange.svg)]()
 [![Vibrations](https://img.shields.io/badge/dynamics-3--Axis%20BHA%20Whirl%20%26%20Resonance-red.svg)]()
 [![Waterhammer](https://img.shields.io/badge/hydraulics-Joukowsky%20Transient%20Surge-critical.svg)]()
@@ -13,19 +14,23 @@
 [![Database](https://img.shields.io/badge/timeseries-TimescaleDB-blueviolet.svg)]()
 [![Dashboard](https://img.shields.io/badge/console-FastAPI%20%2B%20WebSocket%20UI-success.svg)]()
 [![CLI](https://img.shields.io/badge/CLI-rig--twin-informational.svg)]()
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)]()
 
-**rig-digital-twin-core** is a real-time wellbore simulation and predictive digital twin engine for oil and gas drilling operations. It couples high-fidelity, deterministic petroleum engineering physics (wellbore hydraulics, Herschel-Bulkley non-Newtonian rheology, annular pressure losses, bit nozzle jet dynamics, surge/swab tripping kinematics) with adaptive machine learning state estimators.
+**rig-digital-twin-core** is an industrial-grade, real-time wellbore simulation and predictive digital twin engine for oil and gas drilling operations. It couples high-fidelity, deterministic petroleum engineering physics (wellbore hydraulics, Herschel-Bulkley non-Newtonian rheology, annular pressure losses, bit nozzle jet dynamics, surge/swab tripping kinematics) with adaptive machine learning state estimators.
 
-The system ingests streaming WITSML telemetry, dynamically computes theoretical physics baselines across discretized wellbore intervals, models physical residuals using Kalman filters and CUSUM change-point detectors, and alerts drillers to kick precursors, swab underbalance, incipient pack-offs, and bit washouts **minutes before traditional surface tank indicators register them**.
+The system ingests streaming WITSML and WITS Level 0 telemetry, dynamically computes theoretical physics baselines across discretized wellbore intervals, models physical residuals using Kalman filters and CUSUM change-point detectors, and alerts drillers to kick precursors, swab underbalance, incipient pack-offs, and bit washouts **minutes before traditional surface tank indicators register them**.
 
 ---
 
 ## Architecture Overview
 
+### ASCII Dataflow Diagram
+
 ```
                       +---------------------------------------+
                       |       Streaming Telemetry Feed        |
                       |   (WITSML 1.3.1 / 1.4.1 XML / JSON)   |
+                      |    (WITS Level 0 TCP Socket Server)   |
                       +-------------------+-------------------+
                                           |
                                           v
@@ -58,8 +63,8 @@ The system ingests streaming WITSML telemetry, dynamically computes theoretical 
                                           v
                       +---------------------------------------+
                       |   Kalman Residual Filter & CUSUM      |
-                      | - Steady-state bias tracking (cuttings)|
-                      | - High-frequency anomaly deviation    |
+                      | - Denoise dynamic sensor drift        |
+                      | - Page-Hinkley cumulative sum         |
                       +-------------------+-------------------+
                                           |
                                           v
@@ -71,15 +76,66 @@ The system ingests streaming WITSML telemetry, dynamically computes theoretical 
                       | - Bit Washout vs Incipient Pack-Off   |
                       +-------------------+-------------------+
                                           |
-                                          v
-                      +---------------------------------------+
-                      |        TimescaleDB Persistence        |
-                      | - telemetry_records (hypertable)      |
-                      | - physics_baselines (hypertable)      |
-                      | - anomaly_events (hypertable)         |
-                      | - Continuous Aggregates (1-min rollup)|
-                      +---------------------------------------+
+                   +----------------------+----------------------+
+                   |                                             |
+                   v                                             v
+     +---------------------------+                 +---------------------------+
+     |  Operational Advisory     |                 | TimescaleDB Persistence   |
+     | - IADC Kill Sheet Solver  |                 | - telemetry_records       |
+     | - AutoDriller Advisory    |                 | - physics_baselines       |
+     | - Safe Tripping Envelope  |                 | - anomaly_events          |
+     | - FastAPI & Driller UI    |                 | - Continuous 1-min Rollup |
+     +---------------------------+                 +---------------------------+
 ```
+
+### Mermaid Architecture Diagram
+
+```mermaid
+flowchart TD
+    subgraph Ingestion["1. Telemetry Ingestion"]
+        WITS0["WITS0 TCP Server (:9090)"]
+        WITSML["WITSML Parser (XML / JSON)"]
+    end
+
+    subgraph Physics["2. Discretized Physics Engine (API / IADC)"]
+        HB["Herschel-Bulkley Rheology"]
+        HYD["Annular Hydraulics & SPP"]
+        SS["Surge & Swab Kinematics"]
+        TD["3D Torque & Drag (Johancsik)"]
+        VIB["BHA Whirl & Campbell Resonance"]
+        WH["Joukowsky Transient Surge"]
+        GEO["Eaton Dynamic Pore Pressure"]
+    end
+
+    subgraph ML["3. State Estimation & ML Anomaly Detection"]
+        RES["Physics Residual r(t) = y_obs - y_phys"]
+        KF["Kalman Filter (Denoising)"]
+        CUSUM["Page-Hinkley CUSUM Detector"]
+        BAYES["Online Bayesian Auto-Calibrator"]
+    end
+
+    subgraph Advisory["4. Operational Advisory & Presentation"]
+        UI["Real-Time Driller Console (:8000)"]
+        KILL["IADC/API-59 Well Control Kill Sheet"]
+        AUTO["AutoDriller Closed-Loop Optimizer"]
+        FLEET["Multi-Rig Fleet Orchestrator"]
+    end
+
+    subgraph Storage["5. Time-Series Persistence"]
+        TSDB[("TimescaleDB Hypertables")]
+    end
+
+    Ingestion --> Physics
+    Ingestion --> ML
+    Physics --> RES
+    Ingestion --> RES
+    RES --> KF --> CUSUM --> Advisory
+    RES --> BAYES --> Physics
+    Ingestion --> Storage
+    Advisory --> Storage
+```
+
+*For comprehensive mathematical equations and API schemas, see [docs/architecture.md](docs/architecture.md), [docs/physics_formulation.md](docs/physics_formulation.md), [docs/api_reference.md](docs/api_reference.md), and [docs/deployment.md](docs/deployment.md).*
 
 ---
 
@@ -338,112 +394,133 @@ rig-twin wits0-server --port 5000
 
 ```
 rig-digital-twin-core/
-├── pyproject.toml              # Build metadata, dependencies, and rig-twin CLI entry
-├── README.md                   # Complete architectural documentation
-├── docker-compose.yml          # TimescaleDB PostgreSQL-16 service
+├── .env.example                # Canonical environment variables template
+├── .gitignore                  # Strict enterprise git ignore rules
+├── Dockerfile                  # Multi-stage production container build
+├── docker-compose.yml          # Full stack orchestration (App + TimescaleDB)
+├── pyproject.toml              # Build metadata, packaging, and CLI entry point
+├── README.md                   # Project overview, architecture, and quickstart
+├── configs/
+│   ├── twin_config.yaml        # Main digital twin configuration (physics, server, ML)
+│   ├── rig_sample.json         # Reference Gulf of Mexico wellbore & drillstring geometry
+│   └── logging.yaml            # Structured logging configuration
+├── docker/
+│   ├── Dockerfile              # Container definition for container builds
+│   ├── docker-compose.yml      # Service composition for edge/cloud deployments
+│   └── entrypoint.sh           # Safe startup script with database health polling
+├── docs/
+│   ├── architecture.md         # Deep-dive 5-layer decoupled architectural specification
+│   ├── physics_formulation.md  # Comprehensive governing petroleum engineering equations
+│   ├── api_reference.md        # Full REST and WebSocket streaming protocol reference
+│   └── deployment.md           # Production edge and cloud deployment guidelines
 ├── sql/
 │   └── 001_timescaledb_hypertables.sql  # Hypertable DDL, compression & rollup views
-├── rig_twin/
-│   ├── cli.py                  # Unified CLI binary command center
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── models.py           # Domain models: Well, Fluid, Telemetry, Baselines, Alerts
-│   │   ├── fleet.py            # Enterprise multi-well and multi-rig fleet orchestrator
-│   │   └── report_exporter.py  # Automated incident post-mortem dossier generator
-│   ├── physics/
-│   │   ├── __init__.py
-│   │   ├── rheology.py         # Herschel-Bulkley, Bingham, Power-Law & Reynolds engines
-│   │   ├── hydraulics.py       # Pipe/annulus frictional loss, bit nozzles, SPP, ECD
-│   │   ├── surge_swab.py       # Burkhardt & Lubinski dynamic tripping kinematics
-│   │   ├── thermal_pvt.py      # Transient wellbore thermal profile & PVT density rho(P, T)
-│   │   ├── torque_drag.py      # 3D soft-string Johancsik model, buckling & broomsticks
-│   │   ├── cuttings_transport.py # Larsen/Moore cuttings transport & Hole Cleaning Index
-│   │   ├── two_phase_gas.py    # Drift-flux two-phase gas migration & Boyle expansion
-│   │   ├── trajectory.py       # 3D Minimum Curvature Method directional surveying
-│   │   ├── geopressure.py      # Dynamic Eaton pore pressure & Matthews-Kelly fracture
-│   │   ├── safe_trip_envelope.py # Inverted surge/swab velocity ceiling optimizer
-│   │   ├── well_control_kill_sheet.py # IADC/API-59 automated kill sheet calculator
-│   │   ├── mse_optimizer.py    # Teale MSE, bit balling & stick-slip vibration tracker
-│   │   ├── vibrations.py       # 3-axis BHA whirl resonance & Campbell diagram
-│   │   ├── transient_hydraulics.py # 1D acoustic waterhammer Joukowsky pressure surges
-│   │   ├── casing_wear.py      # White & Dawson wear & Palmgren-Miner cyclic fatigue
-│   │   ├── what_if_sandbox.py  # Forward-looking operational simulation sandbox
-│   │   └── engine.py           # RigPhysicsEngine orchestrator
-│   ├── ml/
-│   │   ├── __init__.py
-│   │   ├── estimator.py        # Physics-residual Kalman state estimator & CUSUM detector
-│   │   ├── kick_detector.py    # Precursor kick, swab risk, pack-off, and washout rules
-│   │   ├── auto_calibrator.py  # Online Bayesian parameter auto-calibrator
-│   │   └── autodriller.py      # Closed-loop setpoint advisory [WOB, RPM, Q]
-│   ├── ingestion/
-│   │   ├── __init__.py
-│   │   ├── witsml_parser.py    # WITSML XML 1.3.1/1.4.1 & JSON stream normalizer
-│   │   ├── wits0_parser.py     # Rigsite WITS Level 0 TCP socket streaming server
-│   │   └── stream_processor.py # Continuous background pipeline coupling Physics + ML
-│   ├── persistence/
-│   │   ├── __init__.py
-│   │   ├── schema.py           # SQLAlchemy TimescaleDB hypertable ORM models
-│   │   └── repository.py       # High-throughput batch writer and query repository
-│   ├── server/
-│   │   ├── __init__.py
-│   │   ├── api.py              # FastAPI REST & WebSocket streaming server
-│   │   └── static/
-│   │       └── index.html      # Responsive Driller Console Web Dashboard
-│   ├── streaming/
-│   │   ├── __init__.py
-│   │   └── protocols.py        # High-speed telemetry streaming client
-│   └── demo.py                 # Interactive real-time simulation demo
+├── src/
+│   └── rig_twin/
+│       ├── cli.py              # Unified CLI binary command center (9 subcommands)
+│       ├── core/
+│       │   ├── models.py       # Domain models: Well, Fluid, Telemetry, Baselines, Alerts
+│       │   ├── fleet.py        # Enterprise multi-well and multi-rig fleet orchestrator
+│       │   └── report_exporter.py # Automated incident post-mortem dossier generator
+│       ├── physics/
+│       │   ├── rheology.py     # Herschel-Bulkley, Bingham, Power-Law & Reynolds engines
+│       │   ├── hydraulics.py   # Pipe/annulus frictional loss, bit nozzles, SPP, ECD
+│       │   ├── surge_swab.py   # Burkhardt & Lubinski dynamic tripping kinematics
+│       │   ├── thermal_pvt.py  # Transient wellbore thermal profile & PVT density rho(P, T)
+│       │   ├── torque_drag.py  # 3D soft-string Johancsik model, buckling & broomsticks
+│       │   ├── cuttings_transport.py # Larsen/Moore cuttings transport & Hole Cleaning Index
+│       │   ├── two_phase_gas.py # Drift-flux two-phase gas migration & Boyle expansion
+│       │   ├── trajectory.py   # 3D Minimum Curvature Method directional surveying
+│       │   ├── geopressure.py  # Dynamic Eaton pore pressure & Matthews-Kelly fracture
+│       │   ├── safe_trip_envelope.py # Inverted surge/swab velocity ceiling optimizer
+│       │   ├── well_control_kill_sheet.py # IADC/API-59 automated kill sheet calculator
+│       │   ├── mse_optimizer.py # Teale MSE, bit balling & stick-slip vibration tracker
+│       │   ├── vibrations.py   # 3-axis BHA whirl resonance & Campbell diagram
+│       │   ├── transient_hydraulics.py # 1D acoustic waterhammer Joukowsky pressure surges
+│       │   ├── casing_wear.py  # White & Dawson wear & Palmgren-Miner cyclic fatigue
+│       │   ├── what_if_sandbox.py # Forward-looking operational simulation sandbox
+│       │   └── engine.py       # RigPhysicsEngine orchestrator
+│       ├── ml/
+│       │   ├── estimator.py    # Physics-residual Kalman state estimator & CUSUM detector
+│       │   ├── kick_detector.py # Precursor kick, swab risk, pack-off, and washout rules
+│       │   ├── auto_calibrator.py # Online Bayesian parameter auto-calibrator
+│       │   └── autodriller.py  # Closed-loop setpoint advisory [WOB, RPM, Q]
+│       ├── ingestion/
+│       │   ├── witsml_parser.py # WITSML XML 1.3.1/1.4.1 & JSON stream normalizer
+│       │   ├── wits0_parser.py # Rigsite WITS Level 0 TCP socket streaming server
+│       │   └── stream_processor.py # Continuous background pipeline coupling Physics + ML
+│       ├── persistence/
+│       │   ├── schema.py       # SQLAlchemy TimescaleDB hypertable ORM models
+│       │   └── repository.py   # High-throughput batch writer and query repository
+│       ├── server/
+│       │   ├── api.py          # FastAPI REST & WebSocket streaming server
+│       │   └── static/
+│       │       └── index.html  # Responsive Driller Console Web Dashboard
+│       ├── streaming/
+│       │   └── protocols.py    # High-speed telemetry streaming client
+│       └── demo.py             # Interactive real-time simulation demo
 └── tests/
-    ├── test_physics_hydraulics.py
-    ├── test_physics_surge_swab.py
-    ├── test_witsml_ingestion.py
-    ├── test_ml_estimator.py
-    ├── test_timeseries_persistence.py
-    ├── test_end_to_end_twin.py
-    ├── test_enhanced_physics.py
-    ├── test_server_and_optimization.py
-    ├── test_trajectory_and_geopressure.py
-    ├── test_autodriller_and_reports.py
-    └── test_vibrations_and_fleet.py
+    ├── test_portfolio_compliance.py # Portfolio structure, configs, and CLI validation
+    ├── test_physics_hydraulics.py   # Herschel-Bulkley, frictional loss, and nozzle tests
+    ├── test_physics_surge_swab.py   # Burkhardt & Lubinski surge/swab verification
+    ├── test_witsml_ingestion.py     # XML and JSON WITSML stream parsing tests
+    ├── test_ml_estimator.py         # Kalman filter, CUSUM drift, and anomaly classifier
+    ├── test_timeseries_persistence.py # Hypertables and query repository tests
+    ├── test_end_to_end_twin.py      # Full pipeline integration simulation
+    ├── test_enhanced_physics.py     # Thermal PVT, torque/drag, gas migration, kill sheet
+    ├── test_server_and_optimization.py # FastAPI endpoints and Bayesian calibrator
+    ├── test_trajectory_and_geopressure.py # 3D Minimum Curvature and Eaton geopressure
+    ├── test_autodriller_and_reports.py # AutoDriller setpoints, WITS0 TCP, post-mortems
+    └── test_vibrations_and_fleet.py # BHA whirl, Joukowsky waterhammer, what-if, fleet
 ```
 
 ---
 
 ## 8. Quickstart & Installation
 
-### Prerequisites
-- Python 3.10+ (tested on Python 3.12)
-- Docker & Docker Compose (optional, for live TimescaleDB server)
+### Option A: Single-Command Docker Deployment (Recommended)
+Launch the entire system including TimescaleDB, hypertable schemas, the FastAPI backend, and the interactive Driller Console UI:
 
-### 1. Environment Setup
 ```bash
-git clone https://github.com/example/rig-digital-twin-core.git
+git clone https://github.com/kirk-keel/rig-digital-twin-core.git
 cd rig-digital-twin-core
+cp .env.example .env
+
+# Build and start services
+docker compose up -d --build
+```
+
+- **Driller Console Web UI**: [http://localhost:8000](http://localhost:8000)
+- **Interactive REST Swagger Specs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **WITS0 Rigsite TCP Streaming**: `localhost:9090`
+- **TimescaleDB Database**: `localhost:5432`
+
+### Option B: Local Python Environment
+
+#### 1. Setup Virtual Environment
+```bash
+git clone https://github.com/kirk-keel/rig-digital-twin-core.git
+cd rig-digital-twin-core
+cp .env.example .env
 
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### 2. Run the Test Suite
-Execute the 50 comprehensive unit and integration tests:
+#### 2. Run the Full Test Suite
+Execute all 55 verified unit, physics, and compliance tests:
 ```bash
 pytest -v
 ```
 
-### 3. Launch the Real-Time Driller Console Web Dashboard
+#### 3. Launch Services via `rig-twin` CLI
 ```bash
+# Launch FastAPI server & Driller Console Web UI
 rig-twin serve --port 8000
-```
-Open `http://localhost:8000` to interact with the live telemetry feed, real-time strip charts, drilling margin window, and kick precursor alarms.
 
-### 4. (Optional) Launch TimescaleDB Service
-```bash
-docker compose up -d
-```
-Connect via `psql`:
-```bash
-psql -h localhost -p 5432 -U rig_admin -d rig_digital_twin
+# In a separate terminal, launch the WITS Level 0 TCP streaming server
+rig-twin wits0-server --port 9090
 ```
 
 ---
@@ -481,7 +558,7 @@ fluid = FluidProperties(
     n_flow_index=0.62
 )
 
-# 2. Initialize Stream Processor with TimescaleDB
+# 2. Initialize Stream Processor with In-Memory / TimescaleDB Repository
 repo = TimescaleTwinRepository("sqlite:///:memory:")  # Or postgresql://user:pass@localhost:5432/rig_digital_twin
 twin = StreamProcessor(geometry=well, fluid=fluid, repository=repo, pore_pressure_ppg=10.6)
 
@@ -508,5 +585,6 @@ print(f"Diagnostic: {anomaly.diagnostic_message}")
 
 ---
 
-## 7. License
+## 10. License
+
 Apache 2.0. Built for production drilling engineering and digital twin research.

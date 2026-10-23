@@ -212,7 +212,8 @@ def cli_what_if(args: argparse.Namespace) -> None:
     print("=" * 80)
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """Construct and return the command-line argument parser for rig-twin."""
     parser = argparse.ArgumentParser(
         prog="rig-twin",
         description="Rig Digital Twin Core: Real-time simulation, predictive wellbore physics, and autonomous drilling engine",
@@ -276,6 +277,11 @@ def main():
     p_whatif.add_argument("--value", type=float, required=True, help="Target hypothetical parameter value")
     p_whatif.add_argument("--depth", type=float, default=11450.0, help="Well depth in ft")
 
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
     if not args.subcommand:
         parser.print_help()
