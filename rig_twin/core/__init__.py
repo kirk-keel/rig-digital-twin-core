@@ -1,4 +1,4 @@
-"""Core domain models and definitions for rig-digital-twin-core."""
+"""Core domain models, definitions, and report exporters for rig-digital-twin-core."""
 
 from rig_twin.core.models import (
     AlertSeverity,
@@ -13,6 +13,7 @@ from rig_twin.core.models import (
     TubularSection,
     WellGeometry,
 )
+from rig_twin.core.report_exporter import IncidentReportExporter
 
 __all__ = [
     "AlertSeverity",
@@ -26,4 +27,5 @@ __all__ = [
     "TelemetryRecord",
     "TubularSection",
     "WellGeometry",
+    "IncidentReportExporter",
 ]

@@ -1,11 +1,15 @@
 # rig-digital-twin-core
 
-[![CI Tests](https://img.shields.io/badge/tests-38%20passed-brightgreen.svg)]()
+[![CI Tests](https://img.shields.io/badge/tests-44%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)]()
 [![Physics](https://img.shields.io/badge/physics-Herschel--Bulkley%20%7C%20API%20RP%2013D-orange.svg)]()
+[![Directional](https://img.shields.io/badge/trajectory-Minimum%20Curvature%20(API)-blue.svg)]()
+[![Geopressure](https://img.shields.io/badge/pore%20pressure-Eaton's%20Method-red.svg)]()
 [![Torque & Drag](https://img.shields.io/badge/mechanics-3D%20Johancsik%20Soft--String-yellow.svg)]()
+[![Protocol](https://img.shields.io/badge/protocols-WITSML%20%7C%20WITS0%20TCP-purple.svg)]()
 [![Database](https://img.shields.io/badge/timeseries-TimescaleDB-blueviolet.svg)]()
 [![Dashboard](https://img.shields.io/badge/console-FastAPI%20%2B%20WebSocket%20UI-success.svg)]()
+[![CLI](https://img.shields.io/badge/CLI-rig--twin-informational.svg)]()
 
 **rig-digital-twin-core** is a real-time wellbore simulation and predictive digital twin engine for oil and gas drilling operations. It couples high-fidelity, deterministic petroleum engineering physics (wellbore hydraulics, Herschel-Bulkley non-Newtonian rheology, annular pressure losses, bit nozzle jet dynamics, surge/swab tripping kinematics) with adaptive machine learning state estimators.
 
@@ -231,9 +235,52 @@ Calculates Teale Mechanical Specific Energy and diagnoses drilling dysfunctions:
 ### 4.8 Online Bayesian Parameter Auto-Calibration
 A recursive Bayesian filter continuously calibrates downhole open-hole friction factor multipliers ($f_{\text{mult}}$) and drillpipe roughness using streaming PWD annular pressure and surface SPP telemetry.
 
+### 4.9 3D Directional Trajectory (Minimum Curvature Method)
+Standard API/SPE directional surveying algorithm calculating true 3D borehole coordinates $(TVD, North, East, DLS)$ from survey stations:
+$$\cos\beta = \cos I_1 \cos I_2 + \sin I_1 \sin I_2 \cos(A_2 - A_1), \qquad RF = \frac{2}{\beta}\tan\left(\frac{\beta}{2}\right)$$
+Includes spatial position interpolation and dogleg severity calculations across build, drop, and turn sections.
+
+### 4.10 Dynamic Geopressure & Eaton Pore Pressure Prediction
+Calculates mechanical $d$-exponent and corrected $d_{xc}$, normal compaction trendlines (NCTL), and predicts pore pressure and Matthews-Kelly fracture gradients ahead of the bit:
+$$P_p = \sigma_v - (\sigma_v - P_n)\left(\frac{d_{xc}}{d_{xcn}}\right)^{1.2}, \qquad F_G = \left(\frac{\nu}{1 - \nu}\right)(\sigma_v - P_p) + P_p$$
+
+### 4.11 Autonomous Drilling Advisory (Auto-Driller)
+Computes closed-loop setpoint recommendations $[WOB_{\text{opt}}, RPM_{\text{opt}}, Q_{\text{opt}}]$ to maximize ROP while mitigating stick-slip vibration, preventing cutter balling, and protecting the dynamic ECD geopressure window.
+
+### 4.12 WITS Level 0 (WITS0) TCP Socket Ingestion
+Asynchronous TCP server and stream decoder processing standard WITS Level 0 ASCII packets (Record 01 General Drilling, Record 08 Directional, Record 12 Mud/Hydraulics) broadcast by rigsite mud logging units.
+
+### 4.13 Automated Incident Audit Exporter
+Generates executive-ready Markdown dossiers and structured JSON payloads for kick precursors, pack-offs, and swab events, complete with timeline analysis and IADC kill sheet solutions.
+
 ---
 
-## 5. Real-Time Driller Console Web Dashboard & API
+## 5. Unified CLI Command Center (`rig-twin`)
+
+`rig-digital-twin-core` includes a full command-line suite:
+```bash
+# Launch FastAPI streaming server and Driller Web Console
+rig-twin serve --port 8000
+
+# Run automated terminal simulation with colored outputs
+rig-twin sim
+
+# Calculate automated IADC/API Well Control Kill Sheet
+rig-twin kill-sheet --sidpp 450 --sicp 680 --tvd 11500 --mw 11.2
+
+# Compute 3D wellbore trajectory via Minimum Curvature Method
+rig-twin trajectory
+
+# Predict pore pressure and fracture gradient via Eaton's method
+rig-twin geopressure --tvd 11500 --rop 65 --rpm 120 --wob 22
+
+# Launch TCP WITS Level 0 streaming server
+rig-twin wits0-server --port 5000
+```
+
+---
+
+## 6. Real-Time Driller Console Web Dashboard & API
 
 The core includes an asynchronous FastAPI backend and a responsive dark-mode Web Dashboard served directly at `http://localhost:8000`:
 - **Real-Time Physics Residual Strip Chart**: 1Hz streaming visualization of $\Delta \text{SPP}$ and $\Delta \text{Flow}$ with confidence bands.

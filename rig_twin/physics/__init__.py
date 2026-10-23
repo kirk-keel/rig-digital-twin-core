@@ -15,6 +15,15 @@ from rig_twin.physics.well_control_kill_sheet import (
     KillSheetResult,
 )
 from rig_twin.physics.mse_optimizer import MSEDrillingOptimizer
+from rig_twin.physics.trajectory import (
+    DirectionalTrajectoryEngine,
+    SurveyStation,
+    TrajectoryPoint,
+)
+from rig_twin.physics.geopressure import (
+    GeopressureEngine,
+    GeopressureProfilePoint,
+)
 
 __all__ = [
     "RheologyEngine",
@@ -30,4 +39,9 @@ __all__ = [
     "WellControlInput",
     "KillSheetResult",
     "MSEDrillingOptimizer",
+    "DirectionalTrajectoryEngine",
+    "SurveyStation",
+    "TrajectoryPoint",
+    "GeopressureEngine",
+    "GeopressureProfilePoint",
 ]
