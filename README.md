@@ -283,7 +283,24 @@ Allows drilling superintendents to test prospective changes before execution dow
 
 ---
 
-## 5. Unified CLI Command Center (`rig-twin`)
+## 5. Real-Time Driller Console Web Dashboard & API
+
+The core includes an asynchronous FastAPI backend and a responsive dark-mode Web Dashboard served directly at `http://localhost:8000`:
+- **Real-Time Physics Residual Strip Chart**: 1Hz streaming visualization of $\Delta \text{SPP}$ and $\Delta \text{Flow}$ with confidence bands.
+- **Drilling Margin Window**: Continuous depth profile of Pore Pressure, Dynamic ECD, and Fracture Gradient.
+- **Hook Load Broomstick Charts**: Pick-up, Slack-off, and Rotating off-bottom curves.
+- **Safe Tripping Envelope Gauges**: Dynamic POOH and RIH speed limits.
+- **Automated Kill Sheet Card**: Live ICP/FCP, MAASP, and step-down schedules.
+- **Active Alert Banner**: Instant visual warnings for kick precursors, pack-offs, and washouts with drill floor actions.
+
+To launch the live dashboard:
+```bash
+rig-twin serve --port 8000
+```
+
+---
+
+## 6. Unified CLI Command Center (`rig-twin`)
 
 `rig-digital-twin-core` includes a full command-line suite:
 ```bash
@@ -317,54 +334,64 @@ rig-twin wits0-server --port 5000
 
 ---
 
-## 6. Real-Time Driller Console Web Dashboard & API
-
-The core includes an asynchronous FastAPI backend and a responsive dark-mode Web Dashboard served directly at `http://localhost:8000`:
-- **Real-Time Physics Residual Strip Chart**: 1Hz streaming visualization of $\Delta \text{SPP}$ and $\Delta \text{Flow}$ with confidence bands.
-- **Drilling Margin Window**: Continuous depth profile of Pore Pressure, Dynamic ECD, and Fracture Gradient.
-- **Hook Load Broomstick Charts**: Pick-up, Slack-off, and Rotating off-bottom curves.
-- **Safe Tripping Envelope Gauges**: Dynamic POOH and RIH speed limits.
-- **Automated Kill Sheet Card**: Live ICP/FCP, MAASP, and step-down schedules.
-- **Active Alert Banner**: Instant visual warnings for kick precursors, pack-offs, and washouts with drill floor actions.
-
-To launch the live dashboard:
-```bash
-uvicorn rig_twin.server:app --host 0.0.0.0 --port 8000
-```
-
----
-
-## 6. Repository Structure
+## 7. Repository Structure
 
 ```
 rig-digital-twin-core/
-├── pyproject.toml              # Build metadata and dependency specifications
+├── pyproject.toml              # Build metadata, dependencies, and rig-twin CLI entry
 ├── README.md                   # Complete architectural documentation
 ├── docker-compose.yml          # TimescaleDB PostgreSQL-16 service
 ├── sql/
 │   └── 001_timescaledb_hypertables.sql  # Hypertable DDL, compression & rollup views
 ├── rig_twin/
+│   ├── cli.py                  # Unified CLI binary command center
 │   ├── core/
 │   │   ├── __init__.py
-│   │   └── models.py           # Domain models: Well, Fluid, Telemetry, Baselines, Alerts
+│   │   ├── models.py           # Domain models: Well, Fluid, Telemetry, Baselines, Alerts
+│   │   ├── fleet.py            # Enterprise multi-well and multi-rig fleet orchestrator
+│   │   └── report_exporter.py  # Automated incident post-mortem dossier generator
 │   ├── physics/
 │   │   ├── __init__.py
 │   │   ├── rheology.py         # Herschel-Bulkley, Bingham, Power-Law & Reynolds engines
 │   │   ├── hydraulics.py       # Pipe/annulus frictional loss, bit nozzles, SPP, ECD
 │   │   ├── surge_swab.py       # Burkhardt & Lubinski dynamic tripping kinematics
+│   │   ├── thermal_pvt.py      # Transient wellbore thermal profile & PVT density rho(P, T)
+│   │   ├── torque_drag.py      # 3D soft-string Johancsik model, buckling & broomsticks
+│   │   ├── cuttings_transport.py # Larsen/Moore cuttings transport & Hole Cleaning Index
+│   │   ├── two_phase_gas.py    # Drift-flux two-phase gas migration & Boyle expansion
+│   │   ├── trajectory.py       # 3D Minimum Curvature Method directional surveying
+│   │   ├── geopressure.py      # Dynamic Eaton pore pressure & Matthews-Kelly fracture
+│   │   ├── safe_trip_envelope.py # Inverted surge/swab velocity ceiling optimizer
+│   │   ├── well_control_kill_sheet.py # IADC/API-59 automated kill sheet calculator
+│   │   ├── mse_optimizer.py    # Teale MSE, bit balling & stick-slip vibration tracker
+│   │   ├── vibrations.py       # 3-axis BHA whirl resonance & Campbell diagram
+│   │   ├── transient_hydraulics.py # 1D acoustic waterhammer Joukowsky pressure surges
+│   │   ├── casing_wear.py      # White & Dawson wear & Palmgren-Miner cyclic fatigue
+│   │   ├── what_if_sandbox.py  # Forward-looking operational simulation sandbox
 │   │   └── engine.py           # RigPhysicsEngine orchestrator
 │   ├── ml/
 │   │   ├── __init__.py
 │   │   ├── estimator.py        # Physics-residual Kalman state estimator & CUSUM detector
-│   │   └── kick_detector.py    # Precursor kick, swab risk, pack-off, and washout rules
+│   │   ├── kick_detector.py    # Precursor kick, swab risk, pack-off, and washout rules
+│   │   ├── auto_calibrator.py  # Online Bayesian parameter auto-calibrator
+│   │   └── autodriller.py      # Closed-loop setpoint advisory [WOB, RPM, Q]
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   ├── witsml_parser.py    # WITSML XML 1.3.1/1.4.1 & JSON stream normalizer
+│   │   ├── wits0_parser.py     # Rigsite WITS Level 0 TCP socket streaming server
 │   │   └── stream_processor.py # Continuous background pipeline coupling Physics + ML
 │   ├── persistence/
 │   │   ├── __init__.py
 │   │   ├── schema.py           # SQLAlchemy TimescaleDB hypertable ORM models
 │   │   └── repository.py       # High-throughput batch writer and query repository
+│   ├── server/
+│   │   ├── __init__.py
+│   │   ├── api.py              # FastAPI REST & WebSocket streaming server
+│   │   └── static/
+│   │       └── index.html      # Responsive Driller Console Web Dashboard
+│   ├── streaming/
+│   │   ├── __init__.py
+│   │   └── protocols.py        # High-speed telemetry streaming client
 │   └── demo.py                 # Interactive real-time simulation demo
 └── tests/
     ├── test_physics_hydraulics.py
@@ -372,12 +399,17 @@ rig-digital-twin-core/
     ├── test_witsml_ingestion.py
     ├── test_ml_estimator.py
     ├── test_timeseries_persistence.py
-    └── test_end_to_end_twin.py
+    ├── test_end_to_end_twin.py
+    ├── test_enhanced_physics.py
+    ├── test_server_and_optimization.py
+    ├── test_trajectory_and_geopressure.py
+    ├── test_autodriller_and_reports.py
+    └── test_vibrations_and_fleet.py
 ```
 
 ---
 
-## 5. Quickstart & Installation
+## 8. Quickstart & Installation
 
 ### Prerequisites
 - Python 3.10+ (tested on Python 3.12)
@@ -394,16 +426,16 @@ pip install -e ".[dev]"
 ```
 
 ### 2. Run the Test Suite
-Execute the 22 comprehensive unit and integration tests:
+Execute the 50 comprehensive unit and integration tests:
 ```bash
 pytest -v
 ```
 
-### 3. Run the Real-Time Simulation Demo
-Demonstrates real-time telemetry processing, physics hydraulics baseline generation, gas influx kick precursor detection, and tripping swab risk analysis:
+### 3. Launch the Real-Time Driller Console Web Dashboard
 ```bash
-python -m rig_twin.demo
+rig-twin serve --port 8000
 ```
+Open `http://localhost:8000` to interact with the live telemetry feed, real-time strip charts, drilling margin window, and kick precursor alarms.
 
 ### 4. (Optional) Launch TimescaleDB Service
 ```bash
@@ -416,7 +448,7 @@ psql -h localhost -p 5432 -U rig_admin -d rig_digital_twin
 
 ---
 
-## 6. Programmatic Usage Example
+## 9. Programmatic Usage Example
 
 ```python
 from datetime import datetime, timezone
