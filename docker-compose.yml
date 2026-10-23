@@ -1,0 +1,22 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rig-twin-timescaledb
+    environment:
+      POSTGRES_USER: rig_admin
+      POSTGRES_PASSWORD: rig_password
+      POSTGRES_DB: rig_digital_twin
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./sql/001_timescaledb_hypertables.sql:/docker-entrypoint-initdb.d/001_timescaledb_hypertables.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rig_admin -d rig_digital_twin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  timescaledb_data:
